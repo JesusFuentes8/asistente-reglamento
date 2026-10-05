@@ -6,34 +6,18 @@ from google.genai import types
 
 load_dotenv()
 
-# Cliente inicializado una sola vez con opciones de reintento
-_api_key = os.environ.get("GEMINI_API_KEY", "")
 _cliente = None
 
-if _api_key:
-    _cliente = genai.Client(
-        api_key=_api_key,
-        http_options=types.HttpOptions(
-            retry_options=types.HttpRetryOptions(
-                attempts=5,
-                initial_delay=2.0,
-                max_delay=30.0
-            )
-        )
-    )
-
-def llamar_modelo(historial: list[dict], sistema: str) -> dict:
-    """
-    Realiza la llamada al modelo Gemini a partir del historial recortado.
-    Devuelve un diccionario con texto, tokens_entrada, tokens_salida y modelo.
-    """
+def _obtener_cliente():
     global _cliente
     if _cliente is None:
-        _api_key_actual = os.environ.get("GEMINI_API_KEY", "")
-        if not _api_key_actual:
+        key = os.environ.get("GEMINI_API_KEY", "").strip()
+        if not key:
             raise ValueError("GEMINI_API_KEY no configurada en las variables de entorno.")
+
+        # Inicialización oficial estándar de la Gemini Developer API (gratuita)
         _cliente = genai.Client(
-            api_key=_api_key_actual,
+            api_key=key,
             http_options=types.HttpOptions(
                 retry_options=types.HttpRetryOptions(
                     attempts=5,
@@ -42,8 +26,11 @@ def llamar_modelo(historial: list[dict], sistema: str) -> dict:
                 )
             )
         )
+    return _cliente
 
-    modelo_nombre = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+def llamar_modelo(historial: list[dict], sistema: str) -> dict:
+    cliente = _obtener_cliente()
+    modelo_nombre = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
     contents = []
     for m in historial:
@@ -55,7 +42,11 @@ def llamar_modelo(historial: list[dict], sistema: str) -> dict:
             )
         )
 
-    config = types.GenerateContentConfig(system_instruction=sistema)
+    config = types.GenerateContentConfig(
+        system_instruction=sistema,
+        # Desactiva la llamada automática a funciones para evitar advertencias de consola
+        tools=None
+    )
 
     respuesta = _cliente.models.generate_content(
         model=modelo_nombre,
