@@ -13,13 +13,16 @@ Mensajes que se agregan: `u1`, `m1`, `u2`, `m2`, `u3`, `m3`, `u4` y `m4`.
 | 4 | [u3, m3, u4] | 3 | [u3, m3, u4] | Sí |
 
 **Mensajes del historial completo al terminar:**  
-8 mensajes en total: `[u1, m1, u2, m2, u3, m3, u4, m4]`.
+ `[u1, m1, u2, m2, u3, m3, u4, m4]`.
 
-**¿Qué recortes cambian por la regla «si el primero es del modelo, se descarta» y qué habría recibido el modelo sin ella?**  
-Afecta a las llamadas 3 y 4. En la llamada 3, sin la regla se habrían enviado 4 mensajes: `[m1, u2, m2, u3]`; con la regla se descarta `m1` y quedan 3: `[u2, m2, u3]`. En la llamada 4, sin la regla se habrían enviado `[m2, u3, m3, u4]`; con la regla se descarta `m2` y quedan `[u3, m3, u4]`. Esto garantiza que el contexto comience siempre con el usuario.
+**¿Qué recortes cambian por la regla "si el primero es del modelo, se descarta" y qué habría recibido el modelo sin ella?**  
+Afecta en las llamadas 3 y 4:
+ En la 3, sin la regla se mandarían 4 mensajes: `[m1, u2, m2, u3]`. Como empieza con respuesta del bot (`m1`), se descarta y quedan 3: `[u2, m2, u3]`.
+ En la 4 pasa lo mismo: sin la regla entrarían `[m2, u3, m3, u4]`, pero se quita `m2` y solo se envían 3: `[u3, m3, u4]`.  
+Esto garantiza que la conversación enviada al modelo siempre empiece con un mensaje del usuario.
 
 **En el turno 4, «¿y eso a quién aplica?» se refiere a `u1`. ¿Lo puede entender el modelo? ¿Por qué?**  
-No lo puede entender, porque en la llamada 4 el modelo únicamente recibe `[u3, m3, u4]`. El mensaje `u1` quedó fuera de la ventana de contexto de los últimos 4 mensajes y ya no forma parte del prompt enviado.
+No, no hay forma de que lo entienda. En la llamada 4 el modelo solo recibe `[u3, m3, u4]`. El mensaje `u1` ya se quedó fuera de la ventana por el recorte de memoria, así que ya no existe dentro del contexto que se le manda.
 
 ---
 
@@ -35,7 +38,8 @@ No lo puede entender, porque en la llamada 4 el modelo únicamente recibe `[u3, 
 | T6 | [] | [] | [] | Sí |
 
 **¿Qué hace su código con T6? ¿Su verificación detecta el problema? ¿Qué parte del sistema debería evitar que el modelo escriba así?**  
-En T6 (`Fundamento: Art. 7, fracciones XVIII y XXI`), la expresión regular busca el formato singular `fracc.` o `fracción` por cita individual. Como el texto agrupa dos fracciones con la palabra en plural («fracciones») y unidas por «y», la expresión regular no las reconoce y devuelve `[]`. El validador no detecta el problema porque no extrajo ninguna cita. Quien debe prevenir esta redacción es la instrucción del sistema en `prompts/sistema.md`, obligando al modelo a citar cada fracción por separado con el formato exacto `Art. N, fracc. R` separadas por punto y coma.
+En T6 (`Fundamento: Art. 7, fracciones XVIII y XXI`), la regex no agarra nada porque está programada para buscar palabras en singular (`fracc.` o `fracción`) por cada cita. Al venir en plural ("fracciones") y separadas con "y", la regex se las salta y regresa la lista vacía `[]`. Por eso mismo el validador ni se entera de que hubo detalles, ya que no extrajo nada para comparar.  
+Esto se tiene que prevenir desde el prompt del sistema (`prompts/sistema.md`), poniéndole la regla estricta al modelo de que siempre cite cada fracción por separado con el formato exacto `Art. N, fracc. R` y usando punto y coma entre ellas.
 
 ---
 
@@ -48,7 +52,7 @@ En T6 (`Fundamento: Art. 7, fracciones XVIII y XXI`), la expresión regular busc
 | C1-3 | 3 | 6780 | 125 |
 
 **¿Por qué crecen los tokens de entrada? ¿Qué parte de ellos es el Reglamento?**  
-Crecen porque se van sumando las preguntas y respuestas de los turnos previos que entran en la ventana de memoria corta. La mayor parte de los tokens de entrada (aproximadamente 6,450 tokens) corresponde al texto completo del Reglamento que se inyecta en cada llamada dentro de la instrucción de sistema.
+Van subiendo porque en cada turno se van acumulando las preguntas y respuestas anteriores que entran en la memoria corta. Aun así, casi todos los tokens de entrada (unos 6,450) se van en el texto completo del reglamento que le metemos en el system prompt en cada llamada.
 
 **¿Qué pasaría en el turno 10 de una conversación larga si `recortar` no existiera?**  
-El historial enviaría los 19 mensajes previos acumulados. Los tokens de entrada crecerían de forma continua en cada turno, incrementando la latencia, el costo por llamada y el riesgo de agotar la cuota de tokens por minuto (TPM) permitida por la API.
+El historial mandaría de golpe los 19 mensajes acumulados. Los tokens de entrada crecerían sin parar en cada turno, lo que haría las respuestas mucho más lentas, gastaría tokens y nos arriesgaría a toparnos con el límite de cuota (TPM) de la API.
